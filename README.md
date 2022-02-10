@@ -17,8 +17,7 @@ you can manually install the packages for our code. The package list is shown as
 - pytorch
 - numpy
 - biopython
-- ase
-- anaconda scikit-learn
+- scikit-learn
 - scipy
 - smina
 

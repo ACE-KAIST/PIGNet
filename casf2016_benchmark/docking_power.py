@@ -1,66 +1,93 @@
+#!/usr/bin/env python
+import argparse
 import glob
-import sys
+import os
+from statistics import mean
+from typing import List
+
 import numpy as np
 from scipy import stats
 
-def bootstrap_confidence(values, n=10000, confidence=0.9 ):
+
+def bootstrap_confidence(
+    values: List[float], n: int = 10000, confidence: float = 0.9
+) -> np.ndarray:
     metrics = []
     for _ in range(n):
         indice = np.random.randint(0, len(values), len(values))
         sampled = [values[i] for i in indice]
-        metrics.append(sum(sampled)/len(sampled))
-    metrics = np.array(metrics)       
-    return stats.t.interval(confidence, len(metrics)-1, 
-                loc=np.mean(metrics), scale=np.std(metrics))
+        metrics.append(sum(sampled) / len(sampled))
+    metrics = np.array(metrics)
+    return stats.t.interval(
+        confidence, len(metrics) - 1, loc=np.mean(metrics), scale=np.std(metrics)
+    )
 
-#read rmsd
-rmsd_filenames = glob.glob("../data/CASF-2016/decoys_docking/*_rmsd.dat")
-if len(rmsd_filenames) == 0:
-    print("please download 'CASF-2016' dataset in '../data' directory.")
-    print("Follow the instructions in '../data' directory.")
-    exit(-1)
-id_to_rmsd = dict()
-for fn in rmsd_filenames:
-    with open(fn) as f:
-        lines = f.readlines()[1:]
-    lines = [l.strip().split() for l in lines]
-    for l in lines:
-        id_to_rmsd[l[0]] = float(l[1])
 
-#read data
-decoy_filenames = glob.glob(sys.argv[1])
-n_bootstrap = int(sys.argv[2])
-decoy_filenames = sorted(decoy_filenames, key=lambda x:int(x.split('_')[-1]))
+def main(args: argparse.Namespace) -> None:
+    rmsd_dir = os.path.join(args.rmsd_dir, "*_rmsd.dat")
+    rmsd_filenames = glob.glob(rmsd_dir)
+    id_to_rmsd = dict()
+    for file in rmsd_filenames:
+        with open(file, "r") as f:
+            lines = f.readlines()[1:]
+            lines = [line.split() for line in lines]
+            lines = [[line[0], float(line[1])] for line in lines]
+            dic = dict(lines)
+            id_to_rmsd |= dic
 
-for fn in decoy_filenames:
-    with open(fn) as f:
-        lines = f.readlines()
-        lines = [l.strip().split() for l in lines]
-    #id to affinity
-    id_to_pred = {l[0]:float(l[2]) for l in lines}
+    files = glob.glob(args.files + "*")
+    try:
+        if "txt" in files[0]:
+            files = sorted(
+                files, key=lambda file: int(file.split("_")[-1].split(".")[0])
+            )
+        else:
+            files = sorted(files, key=lambda file: int(file.split("_")[-1]))
+    except Exception:
+        pass
+    for file in files:
+        with open(file, "r") as f:
+            lines = f.readlines()
+            lines = [line.split() for line in lines]
+            id_to_pred = {line[0]: float(line[2]) for line in lines}
 
-    #existing pdb
-    pdbs = sorted(list(set([k.split()[0].split('_')[0] for k in id_to_pred.keys()])))
-    pdb_success=[]
-    for pdb in pdbs:
-        selected_keys = [k for k in id_to_pred.keys() if pdb in k]
-        pred = [id_to_pred[k] for k in selected_keys]
-        pred, sorted_keys = zip(*sorted(zip(pred, selected_keys)))
-        rmsd = [id_to_rmsd[k] for k in sorted_keys]
-        top_n_success = []
-        #print (pdb, sorted_keys[:3], pred[:3], rmsd[:3])
-        for top_n in [1,2,3]:
-            if min(rmsd[:top_n])<2.0:
-                top_n_success.append(1)
-            else:             
-                top_n_success.append(0)
-        pdb_success.append(top_n_success)                
-    
+        pdbs = sorted(list(set(key.split()[0].split("_")[0] for key in id_to_pred)))
+        topn_successed_pdbs = []
+        for pdb in pdbs:
+            selected_keys = [key for key in id_to_pred if pdb in key]
+            pred = [id_to_pred[key] for key in selected_keys]
+            pred, sorted_keys = zip(*sorted(zip(pred, selected_keys)))
+            rmsd = [id_to_rmsd[key] for key in sorted_keys]
+            topn_successed = []
+            for topn in [1, 2, 3]:
+                if min(rmsd[:topn]) < 2.0:
+                    topn_successed.append(1)
+                else:
+                    topn_successed.append(0)
+            topn_successed_pdbs.append(topn_successed)
 
-    print (fn, end='\t')
-    for top_n in [1,2,3]:
-        success = [s[top_n-1] for s in pdb_success]
-        print (f'{sum(success)/len(success):.3f}', end='\t')
-    top1_success = [s[0] for s in pdb_success]
-    confidence_interval = bootstrap_confidence(top1_success, n_bootstrap)
-    print (f'[{confidence_interval[0]:.5f} ~ {confidence_interval[1]:.5f}]')
+        if args.verbose:
+            print(file, end="\t")
+            for topn in [1, 2, 3]:
+                successed = [success[topn - 1] for success in topn_successed_pdbs]
+                print(round(mean(successed), 3), end="\t")
+            top1_success = [success[0] for success in topn_successed_pdbs]
+            confidence_interval = bootstrap_confidence(top1_success, args.n_bootstrap)
+            print(round(confidence_interval[0], 3), end="\t")
+            print(round(confidence_interval[1], 3))
+        else:
+            for topn in [1]:
+                successed = [success[topn - 1] for success in topn_successed_pdbs]
+                print(round(mean(successed), 3))
+    return
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--rmsd_dir", type=str, default="./decoys_docking_rmsd")
+    parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument("-f", "--files", type=str, default="result_docking_")
+    parser.add_argument("-n", "--n_bootstrap", type=int, default=100)
+    args = parser.parse_args()
+
+    main(args)

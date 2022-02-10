@@ -4,6 +4,7 @@ import pickle
 import random
 import sys
 import time
+from typing import Dict, Iterable, List, Union
 
 import numpy as np
 import torch
@@ -13,15 +14,23 @@ from sklearn.metrics import r2_score, roc_auc_score
 from torch.utils.tensorboard import SummaryWriter
 
 import arguments
-import model
+import models
 import utils
+from dataset import get_dataset_dataloader
 
 args = arguments.parser(sys.argv)
 if not args.restart_file:
     print(args)
 
 
-def run(model, data_iter, data_iter2, data_iter3, data_iter4, train_mode):
+def run(
+    model: nn.Module,
+    data_iter: Iterable,
+    data_iter2: Iterable,
+    data_iter3: Iterable,
+    data_iter4: Iterable,
+    train_mode: bool,
+) -> Tuple[Union[float, Dict[str, List[float]]]]:
     model.train() if train_mode else model.eval()
     losses, losses_der1, losses_der2, losses_docking, losses_screening = (
         [],
@@ -173,88 +182,47 @@ train_keys3, test_keys3, id_to_y3 = utils.read_data(args.filename3, args.key_dir
 train_keys4, test_keys4, id_to_y4 = utils.read_data(args.filename4, args.key_dir4)
 
 # Model
-if args.potential == "morse":
-    model = model.DTIMorse(args)
-elif args.potential == "morse_all_pair":
-    model = model.DTIMorseAllPair(args)
-elif args.potential == "harmonic":
-    model = model.DTIHarmonic(args)
-elif args.potential == "gnn":
-    model = model.GNN(args)
-elif args.potential == "cnn3d":
-    model = model.CNN3D(args)
-elif args.potential == "cnn3d_kdeep":
-    model = model.CNN3D_KDEEP(args)
+if args.model == "pignet":
+    model = models.PIGNet(args)
+elif args.model == "gnn":
+    model = models.GNN(args)
+elif args.model == "cnn3d_kdeep":
+    model = models.CNN3D_KDEEP(args)
 else:
-    print(f"No {args.potential} potential")
+    print(f"No {args.model} model")
     exit(-1)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model = utils.initialize_model(model, device, args.restart_file)
 
 if not args.restart_file:
-    print(
-        "number of parameters : ",
-        sum(p.numel() for p in model.parameters() if p.requires_grad),
-    )
+    n_param = sum(param.numel() for param in model.parameters() if p.requires_grad)
+    print("number of parameters : ", n_param)
 
 # Dataloader
-
-(
-    train_dataset,
-    train_dataloader,
-    test_dataset,
-    test_dataloader,
-) = utils.get_dataset_dataloader(
-    train_keys,
-    test_keys,
-    args.data_dir,
-    id_to_y,
-    args.batch_size,
-    args.num_workers,
-    args.pos_noise_std,
+train_dataset, train_dataloader = get_dataset_dataloader(
+    train_keys, args.data_dir, id_to_y, args.batch_size, args.num_workers
 )
-(
-    train_dataset2,
-    train_dataloader2,
-    test_dataset2,
-    test_dataloader2,
-) = utils.get_dataset_dataloader(
-    train_keys2,
-    test_keys2,
-    args.data_dir2,
-    id_to_y2,
-    args.batch_size,
-    args.num_workers,
-    0.0,
+test_dataset, test_dataloader = get_dataset_dataloader(
+    test_keys, args.data_dir, id_to_y, args.batch_size, args.num_workers, False
 )
-(
-    train_dataset3,
-    train_dataloader3,
-    test_dataset3,
-    test_dataloader3,
-) = utils.get_dataset_dataloader(
-    train_keys3,
-    test_keys3,
-    args.data_dir3,
-    id_to_y3,
-    args.batch_size,
-    args.num_workers,
-    0.0,
+train_dataset2, train_dataloader2 = get_dataset_dataloader(
+    train_keys2, args.data_dir2, id_to_y2, args.batch_size, args.num_workers
 )
-(
-    train_dataset4,
-    train_dataloader4,
-    test_dataset4,
-    test_dataloader4,
-) = utils.get_dataset_dataloader(
-    train_keys4,
-    test_keys4,
-    args.data_dir4,
-    id_to_y4,
-    args.batch_size,
-    args.num_workers,
-    0.0,
+test_dataset2, test_dataloader2 = get_dataset_dataloader(
+    test_keys2, args.data_dir2, id_to_y2, args.batch_size, args.num_workers, False
+)
+train_dataset3, train_dataloader3 = get_dataset_dataloader(
+    train_keys3, args.data_dir3, id_to_y3, args.batch_size, args.num_workers
+)
+test_dataset3, test_dataloader3 = get_dataset_dataloader(
+    test_keys3, args.data_dir3, id_to_y3, args.batch_size, args.num_workers, False
+)
+train_dataset4, train_dataloader4 = get_dataset_dataloader(
+    train_keys4, args.data_dir4, id_to_y4, args.batch_size, args.num_workers
+)
+test_dataset4, test_dataloader4 = get_dataset_dataloader(
+    test_keys4, args.data_dir4, id_to_y4, args.batch_size, args.num_workers, False
 )
 
 # Optimizer and loss
@@ -355,7 +323,12 @@ for epoch in range(restart_epoch, args.num_epochs):
         test_pred_screening,
         test_true_screening,
     ) = run(
-        model, test_data_iter, test_data_iter2, test_data_iter3, test_data_iter4, False
+        model,
+        test_data_iter,
+        test_data_iter2,
+        test_data_iter3,
+        test_data_iter4,
+        False,
     )
 
     # Write tensorboard
@@ -383,19 +356,35 @@ for epoch in range(restart_epoch, args.num_epochs):
     )
 
     # Write prediction
-    utils.write_result(args.train_result_filename, train_pred, train_true)
-    utils.write_result(args.test_result_filename, test_pred, test_true)
     utils.write_result(
-        args.train_result_docking_filename, train_pred_docking, train_true_docking
+        args.train_result_filename,
+        train_pred,
+        train_true,
     )
     utils.write_result(
-        args.test_result_docking_filename, test_pred_docking, test_true_docking
+        args.test_result_filename,
+        test_pred,
+        test_true,
     )
     utils.write_result(
-        args.train_result_screening_filename, train_pred_screening, train_true_screening
+        args.train_result_docking_filename,
+        train_pred_docking,
+        train_true_docking,
     )
     utils.write_result(
-        args.test_result_screening_filename, test_pred_screening, test_true_screening
+        args.test_result_docking_filename,
+        test_pred_docking,
+        test_true_docking,
+    )
+    utils.write_result(
+        args.train_result_screening_filename,
+        train_pred_screening,
+        train_true_screening,
+    )
+    utils.write_result(
+        args.test_result_screening_filename,
+        test_pred_screening,
+        test_true_screening,
     )
     end = time.time()
 
