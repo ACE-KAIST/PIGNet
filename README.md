@@ -44,10 +44,11 @@ After that, you can use the execution commands for the benchmark are shown in `b
 
 ## Citing this work
 ~~~
-@article{moon2020pignet,
-    title={PIGNet: A physics-informed deep learning model toward generalized drug-target interaction predictions},
-    author={Moon, Seokhyun and Zhung, Wonho and Yang, Soojung and Lim, Jaechang and Kim, Woo Youn},
-    journal={arXiv preprint arXiv:2008.12249},
-    year={2020}
+@article{moon2022pignet,
+  title={PIGNet: A physics-informed deep learning model toward generalized drug-target interaction predictions},
+  author={Moon, Seokhyun and Zhung, Wonho and Yang, Soojung and Lim, Jaechang and Kim, Woo Youn},
+  journal={Chemical Science},
+  year={2022},
+  publisher={Royal Society of Chemistry}
 }
 ~~~
