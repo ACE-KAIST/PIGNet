@@ -9,7 +9,6 @@ conda install -y pytorch -c pytorch
 conda install -y -c anaconda cudatoolkit
 conda install -y -c conda-forge numpy
 conda install -y -c conda-forge biopython
-conda install -y -c conda-forge ase
 conda install -y -c anaconda scikit-learn
 conda install -y -c conda-forge scipy
 conda install -y -c bioconda smina 

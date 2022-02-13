@@ -50,7 +50,7 @@ else:
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model = utils.initialize_model(model, device, args.restart_file)
 
-n_param = sum(param.numel() for param in model.parameters() if p.requires_grad)
+n_param = sum(param.numel() for param in model.parameters() if param.requires_grad)
 print("number of parameters : ", n_param)
 
 # dataloader
@@ -108,8 +108,8 @@ for i_batch, sample in enumerate(test_data_loader):
             test_pred[key] = pred[idx]
 
 # compute metrics
-true_list = np.array([test_true[key] for key in test_true.keys()])
-pred_list = np.array([test_pred[key] for key in test_pred.keys()])
+true_list = np.array([test_true[key].sum(-1) for key in test_true.keys()])
+pred_list = np.array([test_pred[key].sum(-1) for key in test_pred.keys()])
 test_r2 = r2_score(true_list, pred_list)
 r_value = stats.linregress(true_list, pred_list)[2]
 end = time.time()

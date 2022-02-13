@@ -1,8 +1,8 @@
 import math
 import time
-from argparse import ArgumentParser
+from argparse import Namespace
 from multiprocessing import Pool
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,7 +18,7 @@ from layers import ConvBlock, InteractionNet, GatedGAT, PredictBlock
 
 
 class PIGNet(nn.Module):
-    def __init__(self, args: ArgumentParser):
+    def __init__(self, args: Namespace):
         super().__init__()
         self.args = args
         self.node_embedding = nn.Linear(54, args.dim_gnn, bias=False)
@@ -27,11 +27,6 @@ class PIGNet(nn.Module):
             [GatedGAT(args.dim_gnn, args.dim_gnn) for _ in range(args.n_gnn)]
         )
         if args.interaction_net:
-            num_filter = int(10.0 / args.filter_spacing) + 1
-            self.filter_center = torch.Tensor(
-                [args.filter_spacing * i for i in range(num_filter)]
-            )
-            self.filter_gamma = args.filter_gamma
             self.interaction_net = nn.ModuleList(
                 [InteractionNet(args.dim_gnn) for _ in range(args.n_gnn)]
             )
@@ -60,7 +55,7 @@ class PIGNet(nn.Module):
         self.torsion_coeff = nn.Parameter(torch.tensor([1.0]))
         self.rotor_coeff = nn.Parameter(torch.tensor([0.5]))
 
-    def vina_hbond(
+    def cal_hbond(
         self,
         dm: Tensor,
         h: Tensor,
@@ -84,7 +79,7 @@ class PIGNet(nn.Module):
         retval = retval.sum(-1).sum(-1).unsqueeze(-1)
         return retval
 
-    def vina_hydrophobic(
+    def cal_hydrophobic(
         self,
         dm: Tensor,
         h: Tensor,
@@ -236,33 +231,40 @@ class PIGNet(nn.Module):
             h_cat,
             ligand_vdw_radii,
             target_vdw_radii,
-            vdw_epsilon,
-            vdw_sigma,
             ligand_non_metal,
             target_non_metal,
         )
         energies.append(vdw_energy)
 
         # hbond interaction
-        energies.append(
-            self.vina_hbond(
-                dm, h_cat, ligand_vdw_radii, target_vdw_radii, interaction_indice[:, 0]
-            )
+        hbond = self.cal_hbond(
+            dm,
+            h_cat,
+            ligand_vdw_radii,
+            target_vdw_radii,
+            interaction_indice[:, 0],
         )
+        energies.append(hbond)
 
         # metal interaction
-        energies.append(
-            self.vina_hbond(
-                dm, h_cat, ligand_vdw_radii, target_vdw_radii, interaction_indice[:, 1]
-            )
+        metal = self.cal_hbond(
+            dm,
+            h_cat,
+            ligand_vdw_radii,
+            target_vdw_radii,
+            interaction_indice[:, 1],
         )
+        energies.append(metal)
 
         # hydrophobic interaction
-        energies.append(
-            self.vina_hydrophobic(
-                dm, h_cat, ligand_vdw_radii, target_vdw_radii, interaction_indice[:, 2]
-            )
+        hydrophobic = self.cal_hydrophobic(
+            dm,
+            h_cat,
+            ligand_vdw_radii,
+            target_vdw_radii,
+            interaction_indice[:, 2],
         )
+        energies.append(hydrophobic)
 
         energies = torch.cat(energies, -1)
         # rotor penalty
@@ -289,7 +291,7 @@ class PIGNet(nn.Module):
 
 
 class GNN(nn.Module):
-    def __init__(self, args: ArgumentParser):
+    def __init__(self, args: Namespace):
         super().__init__()
         self.args = args
         self.node_embedding = nn.Linear(54, args.dim_gnn, bias=False)
@@ -298,11 +300,6 @@ class GNN(nn.Module):
             [GatedGAT(args.dim_gnn, args.dim_gnn) for _ in range(args.n_gnn)]
         )
         if args.interaction_net:
-            num_filter = int(10.0 / args.filter_spacing) + 1
-            self.filter_center = torch.Tensor(
-                [args.filter_spacing * i for i in range(num_filter)]
-            )
-            self.filter_gamma = args.filter_gamma
             self.interaction_net = nn.ModuleList(
                 [InteractionNet(args.dim_gnn) for _ in range(args.n_gnn)]
             )
@@ -434,7 +431,7 @@ class GNN(nn.Module):
 
 
 class CNN3D_KDEEP(nn.Module):
-    def __init__(self, args: ArgumentParser):
+    def __init__(self, args: Namespace):
         super().__init__()
         self.args = args
 
@@ -572,7 +569,11 @@ class CNN3D_KDEEP(nn.Module):
 
         lattice_size = int(lattice_dim / self.args.scaling)
         lattice = torch.zeros(
-            batch_size, lattice_size, lattice_size, lattice_size, n_features
+            batch_size,
+            lattice_size,
+            lattice_size,
+            lattice_size,
+            n_features,
         )
         ligand_nonzero_pos = (ligand_pos.sum(-1) == 0).unsqueeze(-1)
         ligand_nonzero_pos_max = (ligand_nonzero_pos * -1e10).to(device)
@@ -603,10 +604,12 @@ class CNN3D_KDEEP(nn.Module):
             ligand_pos_elem = ligand_moved_pos[:, idx, :]
             ligand_h_elem = ligand_h[:, idx, :]
             ligand_vdw_radius = ligand_vdw_radii[:, idx]
-            ligand_moved_pos = ligand_pos_elem.unsqueeze(1).repeat(1, grid.size(0), 1)
+            ligand_moved_pos_elem = ligand_pos_elem.unsqueeze(1).repeat(
+                1, grid.size(0), 1
+            )
             ligand_grid = grid.unsqueeze(0).repeat(ligand_pos_elem.size(0), 1, 1)
             ligand_dist = torch.sqrt(
-                torch.pow(ligand_moved_pos - ligand_grid, 2).sum(-1)
+                torch.pow(ligand_moved_pos_elem - ligand_grid, 2).sum(-1)
             )
             ligand_coeff = 1 - torch.exp(
                 -torch.pow(ligand_vdw_radius.unsqueeze(-1) / ligand_dist, 12)
@@ -631,10 +634,10 @@ class CNN3D_KDEEP(nn.Module):
             target_pos_elem = target_moved_pos[:, idx, :]
             target_h_elem = target_h[:, idx, :]
             target_vdw_radius = target_vdw_radii[:, idx]
-            target_moved_pos = target_pos_elem.unsqueeze(1).repeat(1, grid.size(0), 1)
+            target_moved_pos_elem = target_pos_elem.unsqueeze(1).repeat(1, grid.size(0), 1)
             targeet_grid = grid.unsqueeze(0).repeat(target_pos_elem.size(0), 1, 1)
             target_dist = torch.sqrt(
-                torch.pow(target_moved_pos - targeet_grid, 2).sum(-1)
+                torch.pow(target_moved_pos_elem - targeet_grid, 2).sum(-1)
             )
             target_coeff = 1 - torch.exp(
                 -torch.pow(target_vdw_radius.unsqueeze(-1) / target_dist, 12)

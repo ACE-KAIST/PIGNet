@@ -53,11 +53,9 @@ def initialize_model(
 ) -> nn.Module:
     if load_save_file:
         if device.type == "cpu":
-            model.load_state_dict(
-                torch.load(load_save_file, map_location="cpu"), strict=False
-            )
+            model.load_state_dict(torch.load(load_save_file, map_location="cpu"))
         else:
-            model.load_state_dict(torch.load(load_save_file), strict=False)
+            model.load_state_dict(torch.load(load_save_file))
     else:
         for param in model.parameters():
             if param.dim() == 1:

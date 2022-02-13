@@ -77,7 +77,7 @@ HBOND_ACCEPPTOR_SMARTS = [
 
 
 def get_period_group(atom: Atom) -> List[bool]:
-    period, group = PERIODIC_TABLE[a.GetSymbol().upper()]
+    period, group = PERIODIC_TABLE[atom.GetSymbol().upper()]
     return one_of_k_encoding(period, PERIODS) + one_of_k_encoding(group, GROUPS)
 
 
@@ -107,10 +107,10 @@ def atom_feature(mol: Mol, atom_index: int) -> np.ndarray:
 
 
 def get_atom_feature(mol: Mol) -> np.ndarray:
-    n = m.GetNumAtoms()
+    natoms = mol.GetNumAtoms()
     H = []
-    for i in range(n):
-        H.append(atom_feature(m, i, None, None))
+    for idx in range(natoms):
+        H.append(atom_feature(mol, idx))
     H = np.array(H)
     return H
 
@@ -210,7 +210,7 @@ def mol_to_feature(ligand_mol: Mol, target_mol: Mol) -> Dict[str, Any]:
 
     # prepare protein
     target_natoms = target_mol.GetNumAtoms()
-    target_pos = np.array(ligand_mol.GetConformers()[0].GetPositions())
+    target_pos = np.array(target_mol.GetConformers()[0].GetPositions())
     target_adj = GetAdjacencyMatrix(target_mol) + np.eye(target_natoms)
     target_h = get_atom_feature(target_mol)
 
@@ -271,14 +271,10 @@ class ComplexDataset(Dataset):
     def __len__(self) -> int:
         return len(self.keys)
 
-    def __getitem__(self, idx: int) -> Dict[Any]:
+    def __getitem__(self, idx: int) -> Dict[str, Any]:
         key = self.keys[idx]
         with open(self.data_dir + "/" + key, "rb") as f:
-            data = pickle.load(f)
-        if len(data) == 4:
-            m1, _, m2, _ = data
-        elif len(data) == 2:
-            m1, m2 = data
+            m1, _, m2, _ = pickle.load(f)
 
         sample = mol_to_feature(m1, m2)
         sample["affinity"] = self.id_to_y[key] * -1.36

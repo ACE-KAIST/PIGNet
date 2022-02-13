@@ -94,16 +94,19 @@ def parser(command):
             "--filename",
             help="scoring filename",
             type=str,
+            default="./data/pdbbind_v2019/scoring/pdb_to_affinity.txt",
         )
         parser.add_argument(
             "--key_dir",
             help="scoring key directory",
             type=str,
+            default="./data/pdbbind_v2019/scoring/keys",
         )
         parser.add_argument(
             "--data_dir",
             help="scoring data directory",
             type=str,
+            default="./data/pdbbind_v2019/scoring/data",
         )
         parser.add_argument(
             "--batch_size",
@@ -115,7 +118,7 @@ def parser(command):
             "--num_workers",
             help="number of workers",
             type=int,
-            default=1,
+            default=4,
         )
 
     # for train
@@ -184,25 +187,25 @@ def parser(command):
             "--loss_der1_ratio",
             help="loss der1 ratio",
             type=float,
-            default=1.0,
+            default=10.0,
         )
         parser.add_argument(
             "--loss_der2_ratio",
             help="loss der2 ratio",
             type=float,
-            default=1.0,
+            default=10.0,
         )
         parser.add_argument(
             "--min_loss_der2",
             help="min loss der2",
             type=float,
-            default=-100000000.0,
+            default=-20.0,
         )
         parser.add_argument(
             "--loss_docking_ratio",
             help="loss docking ratio",
             type=float,
-            default=1.0,
+            default=10.0,
         )
         parser.add_argument(
             "--min_loss_docking",
@@ -214,18 +217,19 @@ def parser(command):
             "--loss_screening_ratio",
             help="loss screening ratio",
             type=float,
-            default=1.0,
+            default=5.0,
         )
         parser.add_argument(
             "--loss_screening2_ratio",
             help="loss screening ratio",
             type=float,
-            default=1.0,
+            default=5.0,
         )
         parser.add_argument(
             "--save_dir",
             help="save directory of model save files",
             type=str,
+            default="save",
         )
         parser.add_argument(
             "--save_every",
@@ -242,46 +246,55 @@ def parser(command):
             "--filename2",
             help="docking filename",
             type=str,
+            default="./data/pdbbind_v2019/docking/pdb_to_affinity.txt",
         )
         parser.add_argument(
             "--key_dir2",
             help="docking key directory",
             type=str,
+            default="./data/pdbbind_v2019/docking/keys",
         )
         parser.add_argument(
             "--data_dir2",
             help="docking data directory",
             type=str,
+            default="./data/pdbbind_v2019/docking/data",
         )
         parser.add_argument(
             "--filename3",
             help="random screening filname",
             type=str,
+            default="./data/pdbbind_v2019/random/pdb_to_affinity.txt",
         )
         parser.add_argument(
             "--key_dir3",
             help="random screening key directory",
             type=str,
+            default="./data/pdbbind_v2019/random/keys",
         )
         parser.add_argument(
             "--data_dir3",
             help="random screening data directory",
             type=str,
+            default="./data/pdbbind_v2019/random/data",
         )
         parser.add_argument(
             "--filename4",
             help="cross screening filename",
             type=str,
+            default="./data/pdbbind_v2019/docking/pdb_to_affinity.txt",
         )
         parser.add_argument(
             "--key_dir4",
             help="cross screening key directory",
             type=str,
+            default="./data/pdbbind_v2019/cross/keys",
         )
         parser.add_argument(
             "--data_dir4",
             help="cross screening data directory",
             type=str,
+            default="./data/pdbbind_v2019/cross/data",
         )
 
     # for test

@@ -4,7 +4,7 @@ import pickle
 import random
 import sys
 import time
-from typing import Dict, Iterable, List, Union
+from typing import Dict, Iterable, List, Tuple, Union
 
 import numpy as np
 import torch
@@ -170,6 +170,8 @@ def run(
 # Make directory for save files
 os.makedirs(args.save_dir, exist_ok=True)
 os.makedirs(args.tensorboard_dir, exist_ok=True)
+if os.path.dirname(args.train_result_filename):
+    os.makedirs(os.path.dirname(args.train_result_filename), exist_ok=True)
 
 # Set GPU
 cmd = utils.set_cuda_visible_device(args.ngpu)
@@ -196,7 +198,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model = utils.initialize_model(model, device, args.restart_file)
 
 if not args.restart_file:
-    n_param = sum(param.numel() for param in model.parameters() if p.requires_grad)
+    n_param = sum(param.numel() for param in model.parameters() if param.requires_grad)
     print("number of parameters : ", n_param)
 
 # Dataloader
